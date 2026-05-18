@@ -369,7 +369,7 @@ async function initDrive(){
     await getAccessToken();
     rootFolderId=await findOrCreate(FOLDER_ROOT_NAME,null);
     setDot('ok','Drive conectado ✓');
-    cargarMaestroDesde Drive();
+    cargarMaestroDesde_Drive();
   }catch(e){
     setDot('err','Error Drive: '+e.message);
     console.error(e);
