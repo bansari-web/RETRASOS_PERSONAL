@@ -223,27 +223,27 @@ const SA = {
 const FOLDER_ROOT_NAME = "RETRASOS PERSONAL";
 
 const HORARIOS_DEF = {
-  "Fijos Línea - Verde":[{t:"Mañana",h:"07:00"}],
-  "Fijos Línea - Azul":[{t:"Mañana",h:"07:00"}],
-  "Fijos Línea - Naranja":[{t:"Mañana",h:"07:00"}],
-  "Fijos Línea - Marrón":[{t:"Mañana",h:"07:00"}],
-  "Fijos Línea - Amarillo":[{t:"Mañana",h:"07:00"}],
-  "Fijos Línea - Gris":[{t:"Mañana",h:"07:00"}],
-  "Fijos Línea - Morado":[{t:"Mañana",h:"07:00"}],
-  "Fijos Línea - Rojo":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Verde":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Gris":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Rojo":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Azul":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Naranja":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Amarillo":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Marrón":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos Línea - Morado":[{t:"Mañana",h:"07:00"}],
-  "Fijos Discontinuos - Auxiliares Producción":[{t:"Mañana",h:"07:00"}],
-  "Auxliares Producción":[{t:"Mañana",h:"06:30"}],
-  "Auxiliares Almacén":[{t:"Mañana",h:"06:55"},{t:"Oficina",h:"09:00"}],
-  "Ras Interim":[{t:"Mañana",h:"07:30"}],
-  "Randstad":[{t:"Mañana",h:"06:00"}],
+  "Fijos Línea - Verde":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Línea - Azul":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Línea - Naranja":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Línea - Marrón":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Línea - Amarillo":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Línea - Gris":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Línea - Morado":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Línea - Rojo":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Verde":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Gris":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Rojo":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Azul":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Naranja":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Amarillo":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Marrón":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos Línea - Morado":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Fijos Discontinuos - Auxiliares Producción":[{t:"07:00",h:"07:00"},{t:"07:30",h:"07:30"}],
+  "Auxliares Producción":[{t:"06:30",h:"06:30"},{t:"07:30",h:"07:30"}],
+  "Auxiliares Almacén":[{t:"06:55",h:"06:55"},{t:"07:30",h:"07:30"},{t:"Oficina",h:"09:00"}],
+  "Ras Interim":[{t:"07:30",h:"07:30"}],
+  "Randstad":[{t:"06:00",h:"06:00"},{t:"07:30",h:"07:30"}],
 };
 
 let horarios = JSON.parse(JSON.stringify(HORARIOS_DEF));
@@ -656,8 +656,13 @@ function procesarRows(rows){
   const emps={},dias=new Set();
   for(const r of rows){
     const nom=r['Empleado']||'';if(!nom||nom==='Empleado')continue;
-    const dept=r['Departamento']||'';
-    if(EXCLUIR.some(ex=>dept===ex||dept.startsWith(ex))) continue;
+    const dept=(r['Departamento']||r['departamento']||r['DEPARTAMENTO']||'').trim();
+    const deptNorm=dept.normalize('NFC');
+    const excluido=EXCLUIR.some(ex=>{
+      const exN=ex.normalize('NFC');
+      return deptNorm===exN||deptNorm.startsWith(exN)||deptNorm.includes(exN);
+    });
+    if(excluido) continue;
     const fecha=r['Fecha']||'';
     const primer=r['Primer fichaje']||'-';
     const vac=r['Vacaciones']||'';
@@ -705,6 +710,10 @@ function procesarPegado(){const t=document.getElementById('cpaste').value.trim()
 function prepararSubida(text,nombre,preRows){
   try{
     const rows=preRows||parseCSV(text);
+    if(rows.length>0){
+      const depts=[...new Set(rows.map(r=>r['Departamento']||'').filter(Boolean))];
+      console.log('Departamentos en archivo:',depts);
+    }
     if(rows.length<2){setAlert('ualert','aw','No se encontraron datos válidos.');return;}
     const{emps,dias}=procesarRows(rows);
     const diasL=dias.slice(0,5);
@@ -879,3 +888,4 @@ initDrive();
 </script>
 </body>
 </html>
+
