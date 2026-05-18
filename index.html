@@ -94,7 +94,6 @@
   .tpill{font-size:10px;background:var(--amb-bg);color:var(--amb-text);padding:1px 6px;border-radius:3px;font-weight:600;}
   @media print{header,nav,.filters,.btn,.upload-zone{display:none!important;}main{padding:0;}.tw{border:none;}}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <header>
@@ -453,6 +452,195 @@ function parseCSV(text){
   return lines.slice(1).map(l=>{const v=ss(l);const o={};hdr.forEach((h,i)=>o[h]=(v[i]||'').replace(/"/g,'').trim());return o;});
 }
 
+/* XLSX nativo - sin dependencias externas */
+async function parseXLSX(buffer){
+  const uint8=new Uint8Array(buffer);
+  const files=unzipSync(uint8);
+  const sharedStrings=[];
+  if(files['xl/sharedStrings.xml']){
+    const xml=new TextDecoder().decode(files['xl/sharedStrings.xml']);
+    const doc=new DOMParser().parseFromString(xml,'text/xml');
+    doc.querySelectorAll('si').forEach(si=>{
+      const t=Array.from(si.querySelectorAll('t')).map(n=>n.textContent).join('');
+      sharedStrings.push(t);
+    });
+  }
+  const sheetKey=Object.keys(files).find(k=>k.match(/xl\/worksheets\/sheet1\.xml/i));
+  if(!sheetKey) throw new Error('No se encontró hoja de datos en el XLSX');
+  const sheetXml=new TextDecoder().decode(files[sheetKey]);
+  const doc=new DOMParser().parseFromString(sheetXml,'text/xml');
+  const rowEls=Array.from(doc.querySelectorAll('row'));
+  if(rowEls.length<2) return[];
+  const colLetters=col=>{let n=0;for(const c of col)n=n*26+c.charCodeAt(0)-64;return n;};
+  const getCellVal=(cell)=>{
+    const t=cell.getAttribute('t');
+    const v=cell.querySelector('v');
+    if(!v) return'';
+    if(t==='s') return sharedStrings[parseInt(v.textContent)]||'';
+    if(t==='inlineStr'){const is=cell.querySelector('t');return is?is.textContent:'';}
+    return v.textContent;
+  };
+  const hdrMap={};
+  rowEls[0].querySelectorAll('c').forEach(cell=>{
+    const ref=cell.getAttribute('r');
+    const col=ref.replace(/[0-9]/g,'');
+    hdrMap[col]=(getCellVal(cell)||'').trim();
+  });
+  const result=[];
+  for(let ri=1;ri<rowEls.length;ri++){
+    const obj={};
+    rowEls[ri].querySelectorAll('c').forEach(cell=>{
+      const ref=cell.getAttribute('r');
+      const col=ref.replace(/[0-9]/g,'');
+      const hdr=hdrMap[col];if(!hdr)return;
+      let val=getCellVal(cell);
+      if(hdr==='Fecha'&&val){
+        const serial=parseFloat(val);
+        if(!isNaN(serial)&&serial>10000){
+          const d=new Date(Math.round((serial-25569)*86400*1000));
+          const dd=String(d.getUTCDate()).padStart(2,'0');
+          const mm=String(d.getUTCMonth()+1).padStart(2,'0');
+          val=`${dd}/${mm}/${d.getUTCFullYear()}`;
+        } else {
+          val=val.replace(/-/g,'/');
+        }
+      }
+      if((hdr==='Primer fichaje'||hdr==='Último fichaje')&&val){
+        if(!val.includes(':')&&val.includes('.')){
+          const n=parseFloat(val);
+          if(n>=0&&n<1){
+            const ts=Math.round(n*86400);
+            const hh=String(Math.floor(ts/3600)).padStart(2,'0');
+            const mm2=String(Math.floor((ts%3600)/60)).padStart(2,'0');
+            const ss2=String(ts%60).padStart(2,'0');
+            val=`${hh}:${mm2}:${ss2}`;
+          }
+        } else if(val.length>8) val=val.substring(0,8);
+      }
+      obj[hdr]=(val||'').trim();
+    });
+    if(Object.values(obj).some(v=>v)) result.push(obj);
+  }
+  return result;
+}
+
+function unzipSync(uint8){
+  const view=new DataView(uint8.buffer,uint8.byteOffset);
+  const files={};
+  // Find End of Central Directory
+  let eocd=-1;
+  for(let i=uint8.length-22;i>=0;i--){
+    if(view.getUint32(i,true)===0x06054b50){eocd=i;break;}
+  }
+  if(eocd<0) throw new Error('No es un ZIP válido');
+  const cdOffset=view.getUint32(eocd+16,true);
+  const cdEntries=view.getUint16(eocd+10,true);
+  let cdPos=cdOffset;
+  for(let e=0;e<cdEntries;e++){
+    if(view.getUint32(cdPos,true)!==0x02014b50) break;
+    const fnLen=view.getUint16(cdPos+28,true);
+    const extLen=view.getUint16(cdPos+30,true);
+    const cmtLen=view.getUint16(cdPos+32,true);
+    const localOffset=view.getUint32(cdPos+42,true);
+    const fname=new TextDecoder().decode(uint8.slice(cdPos+46,cdPos+46+fnLen));
+    // Read local file header
+    const lhCompression=view.getUint16(localOffset+8,true);
+    const lhCompSize=view.getUint32(localOffset+18,true);
+    const lhFnLen=view.getUint16(localOffset+26,true);
+    const lhExtLen=view.getUint16(localOffset+28,true);
+    const dataStart=localOffset+30+lhFnLen+lhExtLen;
+    const compData=uint8.slice(dataStart,dataStart+lhCompSize);
+    if(lhCompression===0){
+      files[fname]=compData;
+    } else if(lhCompression===8){
+      files[fname]=inflateRaw(compData);
+    }
+    cdPos+=46+fnLen+extLen+cmtLen;
+  }
+  return files;
+}
+
+function inflateRaw(data){
+  // Pure JS inflate (deflate-raw) - PKZIP method 8
+  // Uses a minimal but complete DEFLATE implementation
+  const out=[];
+  let src=data,si=0,bi=0;
+  const bit=()=>{const b=(src[si]>>bi)&1;bi++;if(bi===8){si++;bi=0;}return b;};
+  const bits=(n)=>{let v=0;for(let i=0;i<n;i++)v|=bit()<<i;return v;};
+  const U16=(i)=>src[i]|(src[i+1]<<8);
+  const litLenBase=[3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+  const litLenExtra=[0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
+  const distBase=[1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+  const distExtra=[0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
+  const buildTree=(lens)=>{
+    const maxBits=Math.max(...lens);
+    const blCount=new Array(maxBits+1).fill(0);
+    lens.forEach(l=>{if(l)blCount[l]++;});
+    const nextCode=new Array(maxBits+2).fill(0);
+    for(let b=1;b<=maxBits;b++) nextCode[b+1]=(nextCode[b]+blCount[b])<<1;
+    const codes=lens.map((l,i)=>{if(!l)return-1;return nextCode[l]++;});
+    const tree={};
+    lens.forEach((l,sym)=>{if(l){const c=codes[sym];if(!tree[l])tree[l]={};tree[l][c]=sym;}});
+    return{tree,maxBits};
+  };
+  const decode=({tree,maxBits})=>{
+    let code=0,len=0;
+    while(len<=maxBits){
+      code=(code<<1)|bit();len++;
+      if(tree[len]&&tree[len][code]!==undefined) return tree[len][code];
+    }
+    throw new Error('inflate decode error');
+  };
+  let bfinal=0;
+  while(!bfinal){
+    bfinal=bit();
+    const btype=bits(2);
+    if(btype===0){
+      if(bi){si++;bi=0;}
+      const len=U16(si);si+=4;
+      for(let i=0;i<len;i++) out.push(src[si++]);
+    } else {
+      let litTree,distTree;
+      if(btype===1){
+        const ll=new Array(288).fill(0).map((_,i)=>i<144?8:i<256?9:i<280?7:8);
+        const dl=new Array(32).fill(5);
+        litTree=buildTree(ll);distTree=buildTree(dl);
+      } else {
+        const hlit=bits(5)+257,hdist=bits(5)+1,hclen=bits(4)+4;
+        const clOrder=[16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+        const clLens=new Array(19).fill(0);
+        for(let i=0;i<hclen;i++) clLens[clOrder[i]]=bits(3);
+        const clTree=buildTree(clLens);
+        const allLens=[];
+        while(allLens.length<hlit+hdist){
+          const sym=decode(clTree);
+          if(sym<16) allLens.push(sym);
+          else if(sym===16){const r=bits(2)+3;for(let i=0;i<r;i++)allLens.push(allLens[allLens.length-1]);}
+          else if(sym===17){const r=bits(3)+3;for(let i=0;i<r;i++)allLens.push(0);}
+          else{const r=bits(7)+11;for(let i=0;i<r;i++)allLens.push(0);}
+        }
+        litTree=buildTree(allLens.slice(0,hlit));
+        distTree=buildTree(allLens.slice(hlit));
+      }
+      while(true){
+        const sym=decode(litTree);
+        if(sym===256) break;
+        if(sym<256){out.push(sym);}
+        else{
+          const li=sym-257;
+          const length=litLenBase[li]+bits(litLenExtra[li]);
+          const di=decode(distTree);
+          const dist=distBase[di]+bits(distExtra[di]);
+          const pos=out.length-dist;
+          for(let i=0;i<length;i++) out.push(out[pos+i]);
+        }
+      }
+    }
+  }
+  return new Uint8Array(out);
+}
+
+
 /* ── HORARIOS ── */
 function toMin(t){if(!t||t==='-')return null;const p=t.substring(0,5).split(':');return parseInt(p[0])*60+parseInt(p[1]);}
 function getTurno(dept,hora){
@@ -493,27 +681,26 @@ function procesarRows(rows){
 function handleFile(e){
   const f=e.target.files[0];if(!f)return;
   const isXlsx=f.name.match(/\.xlsx?$/i);
-  const r=new FileReader();
   if(isXlsx){
-    r.onload=ev=>{
+    setAlert('ualert','ai','Leyendo archivo Excel...');
+    const r=new FileReader();
+    r.onload=async ev=>{
       try{
-        const data=new Uint8Array(ev.target.result);
-        const rows=parseXLSX(data);
-        if(!rows.length){setAlert('ualert','aw','No se pudieron leer datos del archivo Excel.');return;}
-        const csv=rowsToCSV(rows);
-        prepararSubida(csv,f.name,rows);
-      }catch(err){setAlert('ualert','ae','Error leyendo XLSX: '+err.message);}
+        const rows=await parseXLSX(ev.target.result);
+        if(!rows||!rows.length){setAlert('ualert','aw','No se pudieron leer datos del archivo Excel. Comprueba que tiene datos.');return;}
+        setAlert('ualert','','');
+        prepararSubida('',f.name,rows);
+      }catch(err){
+        console.error('XLSX error:',err);
+        setAlert('ualert','ae','Error leyendo XLSX: '+err.message);
+      }
     };
     r.readAsArrayBuffer(f);
   }else{
+    const r=new FileReader();
     r.onload=ev=>prepararSubida(ev.target.result,f.name);
     r.readAsText(f,'utf-8');
   }
-}
-function rowsToCSV(rows){
-  if(!rows.length)return'';
-  const hdr=Object.keys(rows[0]);
-  return[hdr.join(','),...rows.map(r=>hdr.map(h=>JSON.stringify(r[h]||'')).join(','))].join('\n');
 }
 function procesarPegado(){const t=document.getElementById('cpaste').value.trim();if(!t){alert('Pega el contenido primero.');return;}prepararSubida(t,'datos pegados');}
 
@@ -682,7 +869,7 @@ document.querySelectorAll('.modal-bd').forEach(m=>m.addEventListener('click',e=>
 const dz=document.getElementById('dz');
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--blu-bd)';});
 dz.addEventListener('dragleave',()=>{dz.style.borderColor='';});
-dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>prepararSubida(ev.target.result,f.name);r.readAsText(f,'utf-8');});
+dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';const f=e.dataTransfer.files[0];if(!f)return;handleFile({target:{files:[f]}});});
 
 /* ── INIT ── */
 loadLocal();
