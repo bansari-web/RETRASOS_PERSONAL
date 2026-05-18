@@ -94,6 +94,7 @@
   .tpill{font-size:10px;background:var(--amb-bg);color:var(--amb-text);padding:1px 6px;border-radius:3px;font-weight:600;}
   @media print{header,nav,.filters,.btn,.upload-zone{display:none!important;}main{padding:0;}.tw{border:none;}}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <header>
@@ -123,10 +124,10 @@
       <div class="card">
         <div class="ctitle">Archivo CSV semanal</div>
         <div class="upload-zone" onclick="document.getElementById('finput').click()" id="dz">
-          <input type="file" id="finput" accept=".csv,.txt" style="display:none" onchange="handleFile(event)">
+          <input type="file" id="finput" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="handleFile(event)">
           <div class="uicon">📂</div>
           <div class="utitle">Arrastra el CSV aquí o haz clic para seleccionar</div>
-          <div class="usub">Archivo exportado del sistema de control de presencia</div>
+          <div class="usub">Formatos aceptados: .xlsx, .xls, .csv</div>
         </div>
         <div style="margin-top:16px;">
           <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">O pega el contenido directamente:</div>
@@ -489,12 +490,36 @@ function procesarRows(rows){
 }
 
 /* ── SUBIR ── */
-function handleFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>prepararSubida(ev.target.result,f.name);r.readAsText(f,'utf-8');}
-function procesarPegado(){const t=document.getElementById('cpaste').value.trim();if(!t){alert('Pega el CSV primero.');return;}prepararSubida(t,'datos pegados');}
+function handleFile(e){
+  const f=e.target.files[0];if(!f)return;
+  const isXlsx=f.name.match(/\.xlsx?$/i);
+  const r=new FileReader();
+  if(isXlsx){
+    r.onload=ev=>{
+      try{
+        const data=new Uint8Array(ev.target.result);
+        const rows=parseXLSX(data);
+        if(!rows.length){setAlert('ualert','aw','No se pudieron leer datos del archivo Excel.');return;}
+        const csv=rowsToCSV(rows);
+        prepararSubida(csv,f.name,rows);
+      }catch(err){setAlert('ualert','ae','Error leyendo XLSX: '+err.message);}
+    };
+    r.readAsArrayBuffer(f);
+  }else{
+    r.onload=ev=>prepararSubida(ev.target.result,f.name);
+    r.readAsText(f,'utf-8');
+  }
+}
+function rowsToCSV(rows){
+  if(!rows.length)return'';
+  const hdr=Object.keys(rows[0]);
+  return[hdr.join(','),...rows.map(r=>hdr.map(h=>JSON.stringify(r[h]||'')).join(','))].join('\n');
+}
+function procesarPegado(){const t=document.getElementById('cpaste').value.trim();if(!t){alert('Pega el contenido primero.');return;}prepararSubida(t,'datos pegados');}
 
-function prepararSubida(text,nombre){
+function prepararSubida(text,nombre,preRows){
   try{
-    const rows=parseCSV(text);
+    const rows=preRows||parseCSV(text);
     if(rows.length<2){setAlert('ualert','aw','No se encontraron datos válidos.');return;}
     const{emps,dias}=procesarRows(rows);
     const diasL=dias.slice(0,5);
