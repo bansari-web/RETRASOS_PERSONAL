@@ -1,1 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Retrasos — RRHH</title>
+<style>
+  :root {
+    --bg:#ffffff;--bg2:#f7f7f5;--bg3:#f0efeb;
+    --text:#1a1a1a;--text2:#666;--text3:#999;
+    --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
+    --red-bg:#FCEBEB;--red-text:#791F1F;--red-bd:#E24B4A;
+    --amb-bg:#FAEEDA;--amb-text:#633806;--amb-bd:#EF9F27;
+    --grn-bg:#EAF3DE;--grn-text:#27500A;--grn-bd:#639922;
+    --blu-bg:#E6F1FB;--blu-text:#0C447C;--blu-bd:#378ADD;
+    --r:8px;--rl:12px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--mono:'SF Mono','Fira Mono',monospace;
+  }
+  @media(prefers-color-scheme:dark){:root{--bg:#1a1a1a;--bg2:#242424;--bg3:#2e2e2e;--text:#f0f0f0;--text2:#aaa;--text3:#555;--border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);--red-bg:#501313;--red-text:#F09595;--amb-bg:#412402;--amb-text:#FAC775;--grn-bg:#173404;--grn-text:#C0DD97;--blu-bg:#042C53;--blu-text:#85B7EB;}}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:14px;min-height:100vh;}
+  header{background:var(--bg);border-bottom:0.5px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:56px;position:sticky;top:0;z-index:100;}
+  .logo{font-size:15px;font-weight:600;letter-spacing:-0.3px;}
+  .logo span{color:var(--text2);font-weight:400;}
+  .drive-status{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);}
+  .dot{width:8px;height:8px;border-radius:50%;background:#ccc;}
+  .dot.ok{background:#639922;} .dot.err{background:#E24B4A;} .dot.busy{background:#EF9F27;}
+  .layout{display:flex;min-height:calc(100vh - 56px);}
+  nav{width:200px;min-width:200px;background:var(--bg);border-right:0.5px solid var(--border);padding:16px 0;}
+  .ni{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:13px;color:var(--text2);cursor:pointer;border:none;background:none;width:100%;text-align:left;}
+  .ni:hover{background:var(--bg2);color:var(--text);}
+  .ni.active{background:var(--bg2);color:var(--text);font-weight:500;}
+  .nsep{height:0.5px;background:var(--border);margin:8px 16px;}
+  main{flex:1;padding:24px;max-width:1200px;}
+  .page{display:none;} .page.active{display:block;}
+  .ptitle{font-size:20px;font-weight:600;margin-bottom:4px;}
+  .psub{font-size:13px;color:var(--text2);margin-bottom:24px;}
+  .card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:20px;margin-bottom:16px;}
+  .ctitle{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;}
+  .stat{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--r);padding:14px 16px;}
+  .slabel{font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;}
+  .sval{font-size:26px;font-weight:600;}
+  .sval.red{color:var(--red-bd);} .sval.amb{color:var(--amb-bd);} .sval.grn{color:var(--grn-bd);}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+  input[type=text],select{border:0.5px solid var(--border2);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);}
+  input[type=text]{min-width:200px;}
+  .tw{overflow-x:auto;border-radius:var(--rl);border:0.5px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:12px;background:var(--bg);}
+  th{text-align:left;padding:9px 12px;background:var(--bg2);color:var(--text2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;border-bottom:0.5px solid var(--border);white-space:nowrap;}
+  td{padding:8px 12px;border-bottom:0.5px solid var(--border);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--bg2);}
+  tr.roja td{background:var(--red-bg)!important;} tr.roja:hover td{background:#F7C1C1!important;}
+  tr.amber td{background:var(--amb-bg)!important;} tr.amber:hover td{background:#FAC775!important;}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;}
+  .br{background:var(--red-bg);color:var(--red-text);} .ba{background:var(--amb-bg);color:var(--amb-text);}
+  .bg{background:var(--grn-bg);color:var(--grn-text);} .bb{background:var(--blu-bg);color:var(--blu-text);}
+  .bx{background:var(--bg2);color:var(--text2);}
+  .mono{font-family:var(--mono);font-size:11px;}
+  .clate{color:var(--red-bd);font-weight:600;} .cok{color:var(--grn-bd);} .cdim{color:var(--text3);}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:0.5px solid var(--border2);border-radius:var(--r);padding:8px 14px;font-size:13px;cursor:pointer;background:var(--bg);color:var(--text);font-family:var(--font);}
+  .btn:hover{background:var(--bg2);}
+  .btnp{background:var(--text);color:var(--bg);border-color:var(--text);}
+  .btnp:hover{opacity:0.85;}
+  .upload-zone{border:1.5px dashed var(--border2);border-radius:var(--rl);padding:32px;text-align:center;cursor:pointer;background:var(--bg2);}
+  .upload-zone:hover{background:var(--bg3);border-color:var(--blu-bd);}
+  .uicon{font-size:36px;color:var(--text3);margin-bottom:10px;}
+  .utitle{font-size:15px;font-weight:500;margin-bottom:4px;}
+  .usub{font-size:12px;color:var(--text2);}
+  .alert{padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:12px;border:0.5px solid;}
+  .ai{background:var(--blu-bg);color:var(--blu-text);border-color:var(--blu-bd);}
+  .as{background:var(--grn-bg);color:var(--grn-text);border-color:var(--grn-bd);}
+  .aw{background:var(--amb-bg);color:var(--amb-text);border-color:var(--amb-bd);}
+  .ae{background:var(--red-bg);color:var(--red-text);border-color:var(--red-bd);}
+  .modal-bd{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;align-items:center;justify-content:center;}
+  .modal-bd.open{display:flex;}
+  .modal{background:var(--bg);border-radius:var(--rl);padding:24px;width:440px;max-width:90vw;border:0.5px solid var(--border);}
+  .mtitle{font-size:16px;font-weight:600;margin-bottom:8px;}
+  .msub{font-size:13px;color:var(--text2);margin-bottom:20px;}
+  .mact{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;}
+  .fg{margin-bottom:14px;}
+  .fl{font-size:12px;font-weight:500;margin-bottom:5px;display:block;}
+  .fi{width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:8px 10px;font-size:13px;background:var(--bg);color:var(--text);font-family:var(--font);}
+  .pbar{height:4px;background:var(--bg3);border-radius:2px;margin-top:10px;overflow:hidden;}
+  .pfill{height:100%;background:var(--blu-bd);border-radius:2px;transition:width 0.3s;}
+  .empty{text-align:center;padding:48px 24px;color:var(--text2);}
+  .eicon{font-size:40px;margin-bottom:12px;}
+  .horario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}
+  .hi{background:var(--bg2);border-radius:var(--r);padding:12px 14px;}
+  .hdept{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;}
+  .hrow{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+  .hlbl{font-size:12px;color:var(--text2);min-width:70px;}
+  input[type=time]{border:0.5px solid var(--border2);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--bg);color:var(--text);}
+  .tpill{font-size:10px;background:var(--amb-bg);color:var(--amb-text);padding:1px 6px;border-radius:3px;font-weight:600;}
+  @media print{header,nav,.filters,.btn,.upload-zone{display:none!important;}main{padding:0;}.tw{border:none;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Control de Retrasos <span>— RRHH</span></div>
+  <div class="drive-status">
+    <div class="dot" id="ddot"></div>
+    <span id="dlbl">Iniciando...</span>
+  </div>
+</header>
+<div class="layout">
+  <nav>
+    <button class="ni active" onclick="showPage('subir')">📤 Subir semana</button>
+    <button class="ni" onclick="showPage('semanal')">📋 Vista semanal</button>
+    <button class="ni" onclick="showPage('mensual')">📊 Vista mensual</button>
+    <div class="nsep"></div>
+    <button class="ni" onclick="showPage('horarios')">🕐 Horarios</button>
+    <div class="nsep"></div>
+    <button class="ni" onclick="exportarAmonestaciones()">📄 Exportar alertas</button>
+  </nav>
+  <main>
 
+    <!-- SUBIR -->
+    <div id="page-subir" class="page active">
+      <div class="ptitle">Subir semana</div>
+      <div class="psub">Carga el CSV semanal. Se guarda automáticamente en Drive bajo <strong>RETRASOS PERSONAL / 2026 / Mes</strong>.</div>
+      <div id="ualert"></div>
+      <div class="card">
+        <div class="ctitle">Archivo CSV semanal</div>
+        <div class="upload-zone" onclick="document.getElementById('finput').click()" id="dz">
+          <input type="file" id="finput" accept=".csv,.txt" style="display:none" onchange="handleFile(event)">
+          <div class="uicon">📂</div>
+          <div class="utitle">Arrastra el CSV aquí o haz clic para seleccionar</div>
+          <div class="usub">Archivo exportado del sistema de control de presencia</div>
+        </div>
+        <div style="margin-top:16px;">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">O pega el contenido directamente:</div>
+          <textarea id="cpaste" rows="5" style="width:100%;border:0.5px solid var(--border2);border-radius:var(--r);padding:8px;font-size:12px;font-family:var(--mono);background:var(--bg2);color:var(--text);resize:vertical;" placeholder="Código de acceso,Empleado,Departamento,..."></textarea>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button class="btn btnp" onclick="procesarPegado()">Procesar y guardar en Drive</button>
+            <button class="btn" onclick="document.getElementById('cpaste').value=''">Limpiar</button>
+          </div>
+        </div>
+      </div>
+      <div id="pwrap" style="display:none" class="card">
+        <div class="ctitle">Guardando en Drive...</div>
+        <div id="pstep" style="font-size:13px;color:var(--text2);margin-bottom:8px;"></div>
+        <div class="pbar"><div class="pfill" id="pfill" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- SEMANAL -->
+    <div id="page-semanal" class="page">
+      <div class="ptitle">Vista semanal</div>
+      <div class="psub" id="ssub">Selecciona una semana para analizar los retrasos.</div>
+      <div class="filters">
+        <select id="ssel" onchange="cargarSemana(this.value)"><option value="">— Seleccionar semana —</option></select>
+        <input type="text" id="ssearch" placeholder="Buscar empleado..." oninput="renderSemanal()">
+        <select id="sdept" onchange="renderSemanal()"><option value="">Todos los depts.</option></select>
+        <select id="sestado" onchange="renderSemanal()">
+          <option value="">Todos</option>
+          <option value="alerta">Solo alertas (≥2)</option>
+          <option value="uno">Con algún retraso</option>
+          <option value="ok">Sin retrasos</option>
+        </select>
+        <button class="btn" onclick="window.print()">🖨 Imprimir</button>
+      </div>
+      <div class="stats" id="sstats"></div>
+      <div class="tw" id="stable"><div class="empty"><div class="eicon">📋</div><div>Carga un CSV para ver los datos</div></div></div>
+    </div>
+
+    <!-- MENSUAL -->
+    <div id="page-mensual" class="page">
+      <div class="ptitle">Vista mensual acumulada</div>
+      <div class="psub">Acumulado de todas las semanas. Alerta roja si un empleado supera 4 retrasos en el mes.</div>
+      <div class="filters">
+        <input type="text" id="msearch" placeholder="Buscar empleado..." oninput="renderMensual()">
+        <select id="mdept" onchange="renderMensual()"><option value="">Todos los depts.</option></select>
+        <select id="mestado" onchange="renderMensual()">
+          <option value="">Todos</option>
+          <option value="alerta">Solo alertas (≥4)</option>
+          <option value="uno">Con algún retraso</option>
+        </select>
+        <button class="btn" onclick="exportarAmonestaciones()">📄 Exportar amonestaciones</button>
+        <button class="btn" onclick="window.print()">🖨 Imprimir</button>
+      </div>
+      <div class="stats" id="mstats"></div>
+      <div class="tw" id="mtable"><div class="empty"><div class="eicon">📊</div><div>Carga semanas para ver el acumulado</div></div></div>
+    </div>
+
+    <!-- HORARIOS -->
+    <div id="page-horarios" class="page">
+      <div class="ptitle">Horarios de entrada</div>
+      <div class="psub">Configura la hora de cada departamento. Tolerancia: 1 minuto. Doble turno = se compara con el turno más cercano.</div>
+      <div class="horario-grid" id="hgrid" style="margin-bottom:16px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btnp" onclick="guardarHorarios()">Guardar cambios</button>
+        <button class="btn" onclick="resetHorarios()">Restaurar defecto</button>
+        <button class="btn" onclick="addDept()">+ Añadir departamento</button>
+      </div>
+      <div id="hok" style="margin-top:10px;"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL CONFIRMAR SEMANA -->
+<div class="modal-bd" id="mconf">
+  <div class="modal">
+    <div class="mtitle">Confirmar carga de semana</div>
+    <div class="msub" id="mcsub"></div>
+    <div id="mcinfo"></div>
+    <div class="mact">
+      <button class="btn" onclick="closeM('mconf')">Cancelar</button>
+      <button class="btn btnp" onclick="confirmar()">Guardar en Drive ↗</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── CREDENCIALES SERVICE ACCOUNT ── */
+const SA = {
+  email: "rrhh-servicios@app-rrhh-496706.iam.gserviceaccount.com",
+  privateKeyId: "e44bcd6e9567359b84213bd637c26709d1ce8f1d",
+  privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC0AxOxVzr4cO4c\n+/vL4ifOHRenVSdiZEDQG+tE3DKDM9n9khy3VbwW0SB+U2Jx5fkRc7d202WCbMpy\nPWHzrHYbe5mMclS9vLy/JfQB6zAiORk9v+7WlwDnK54eh+Qq07L1bGgtBDPh2hSk\n6teVDHuxcxsCyJFHhvJpW4AeDyfTnQT77JqoTuUDMlPT4xX5gr47n/UINiJyPBlp\nhVp5vmQn6K2HlkS2XevTvTPmz0frqVEf3ieJVdqBTTQibk+ti4H9dEguXviloIHO\nXLVLhLrsnzo7StAZkvcdUH0CqtHwmUfparMxf465H21bBm14Ch+apxjqDPb0pcUq\nDWP3fxA5AgMBAAECggEAIj/knw0LBAqOj3a1J4tZyfpYjgaiZfLPrxjkyFcCCFsU\n+o0yiAJYtVmoTkjEtgmMvFCRQ1tA2NIkqZw6tw9k8GExq5p0O559pfvNY5EROS22\nevx575vO+OzgWow98hUR22a7IneGfI4O9/rTtkDoBvDw3nR1Sc/n7vpRE8cL65PG\nbvia7x3yrvrWHZ7Umwrc2YCsJXsa+AB+u5VWDq+xir0T5M/Yf3bwqffhXxszPJAS\ndujgpFOz3PyE6R0JSsOC3dUB23LgPxlBmbsURuo/cYcD3nDGz8J5/FHe0kPUAwsq\n7oDRyka3C7+e0mW2il/I4yMttAewkT7G56Zk+sKMJQKBgQDkXU/6j92TCKoAGfUQ\n4qPpD+FCU2wMx/83Qj9cjB5Q2Lrdpw15dXJALniZ0q5FwatlODcI5XEs08/uMG1Y\nTeEvq8EzAxgijz/z1ZPbo/RchJ1UyCYI2EUW1PziO1pAtbNWPoHZwrKj6Hz4DFnD\ne8eZqHiJl/lRTnEOyx6jV9hL3QKBgQDJy9BmblWeUALI0Al+zUotvLM5PU1D7FOG\nE97j1A9GM1+A3iHrZJK1jF0SiAhNn6an8bSrNAfnpZZnmORnudGdQOnO2QwYMOcL\nu1ADO+wHtef36FltxFrSGFGmvBy8zGY8CS40pItI7XS9kGb0Ni4Uafc7wIXV8tbW\ntTdYfA+uDQKBgAtuxH9FzpD64Q/qPMOgpRYY7m0UohctuBA7J9LpTOc9QnWwVFNd\nVt/xs6X3zzO802jY3KB8ZCMbY5CIKiE+nOR3E9AK+p1YUJpTefiIB8bN+NZywry0\nnxjahuKImCcfMaBCttuBDNJ55C/C5oeL3d1KeuZgjmHMrIpSDvGchz6dAoGAHaYZ\nd4NMhxcgYZrXWk8VUAUCnC1aldk6KF/xBq5YlCrmJEv+1dQQDiaSYi+kcKs9VD2a\nGvFpG+rjX1NCc88EckNgVuji8wb0W2/pAKCkPDnI3E7CHPOVmHrEPGg1HLQ3bSi4\nJjnq0Qs6dMOrrMPtH0i2b4wI3fdxA1jayeBoeV0CgYBts2E0ly9xhRnCaEmJlWwa\n6vUtWVm5ZGcALrEARsbt0ls4bLft7IRXp0i7w5wItfhFnK/zfxGOGWxSM6iPn43H\nLZLFw0XYNd8kAaTdoYoUM4jKfRwiYTNE/TxaVL1wbwJhUc4deIJue1iL3cpfn13W\ngbHzRG4fAsiRdcESKhjRLg==\n-----END PRIVATE KEY-----\n"
+};
+
+const FOLDER_ROOT_NAME = "RETRASOS PERSONAL";
+
+const HORARIOS_DEF = {
+  "Cámaras":[{t:"Mañana",h:"06:00"}],
+  "Carretilleros":[{t:"Mañana",h:"06:00"},{t:"Tarde",h:"14:00"}],
+  "Carretilleros Línea":[{t:"Mañana",h:"06:00"},{t:"Tarde",h:"14:00"}],
+  "Fijos Línea - Verde":[{t:"Mañana",h:"07:00"}],
+  "Fijos Línea - Azul":[{t:"Mañana",h:"07:00"}],
+  "Fijos Línea - Naranja":[{t:"Mañana",h:"07:00"}],
+  "Fijos Línea - Marrón":[{t:"Mañana",h:"07:00"}],
+  "Fijos Línea - Amarillo":[{t:"Mañana",h:"07:00"}],
+  "Fijos Línea - Gris":[{t:"Mañana",h:"07:00"}],
+  "Fijos Línea - Morado":[{t:"Mañana",h:"07:00"}],
+  "Fijos Línea - Rojo":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Verde":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Gris":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Rojo":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Azul":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Naranja":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Amarillo":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Marrón":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos Línea - Morado":[{t:"Mañana",h:"07:00"}],
+  "Fijos Discontinuos - Auxiliares Producción":[{t:"Mañana",h:"07:00"}],
+  "Auxliares Producción":[{t:"Mañana",h:"06:30"}],
+  "Auxiliares Almacén":[{t:"Mañana",h:"06:55"},{t:"Oficina",h:"09:00"}],
+  "Proyectos":[{t:"Mañana",h:"06:30"}],
+  "Ras Interim":[{t:"Mañana",h:"07:30"}],
+  "Randstad":[{t:"Mañana",h:"06:00"}],
+};
+
+let horarios = JSON.parse(JSON.stringify(HORARIOS_DEF));
+let semanas = [];
+let semanaActual = null;
+let pending = null;
+let driveToken = null;
+let rootFolderId = null;
+
+/* ── LOCAL STORAGE ── */
+function loadLocal(){
+  try{const h=localStorage.getItem('rrhh_h');if(h)horarios=JSON.parse(h);}catch(e){}
+  try{const s=localStorage.getItem('rrhh_s');if(s)semanas=JSON.parse(s);}catch(e){}
+}
+function saveLocal(){
+  try{localStorage.setItem('rrhh_s',JSON.stringify(semanas));}catch(e){}
+  try{localStorage.setItem('rrhh_h',JSON.stringify(horarios));}catch(e){}
+}
+
+/* ── JWT / OAUTH ── */
+function b64url(buf){
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+function strToAb(s){const b=new TextEncoder().encode(s);return b.buffer;}
+
+async function getAccessToken(){
+  if(driveToken && driveToken.exp > Date.now()/1000+60) return driveToken.token;
+  const now=Math.floor(Date.now()/1000);
+  const header=b64url(strToAb(JSON.stringify({alg:"RS256",typ:"JWT",kid:SA.privateKeyId})));
+  const claim=b64url(strToAb(JSON.stringify({
+    iss:SA.email,scope:"https://www.googleapis.com/auth/drive",
+    aud:"https://oauth2.googleapis.com/token",iat:now,exp:now+3600
+  })));
+  const msg=`${header}.${claim}`;
+  const pem=SA.privateKey.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g,'');
+  const der=Uint8Array.from(atob(pem),c=>c.charCodeAt(0));
+  const key=await crypto.subtle.importKey('pkcs8',der.buffer,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);
+  const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,strToAb(msg));
+  const jwt=`${msg}.${b64url(sig)}`;
+  const res=await fetch('https://oauth2.googleapis.com/token',{
+    method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+  });
+  if(!res.ok) throw new Error('Auth error: '+await res.text());
+  const data=await res.json();
+  driveToken={token:data.access_token,exp:now+3500};
+  return data.access_token;
+}
+
+/* ── DRIVE API ── */
+async function driveGet(path){
+  const tok=await getAccessToken();
+  const r=await fetch(`https://www.googleapis.com/drive/v3/${path}`,{headers:{Authorization:`Bearer ${tok}`}});
+  if(!r.ok) throw new Error(`Drive GET ${r.status}`);
+  return r.json();
+}
+async function drivePost(path,body,tok){
+  tok=tok||await getAccessToken();
+  const r=await fetch(`https://www.googleapis.com/drive/v3/${path}`,{
+    method:'POST',headers:{Authorization:`Bearer ${tok}`,'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error(`Drive POST ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function findFolder(name,parentId){
+  let q=`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  if(parentId) q+=` and '${parentId}' in parents`;
+  const r=await driveGet(`files?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`);
+  return r.files&&r.files.length?r.files[0].id:null;
+}
+async function createFolder(name,parentId){
+  const body={name,mimeType:'application/vnd.google-apps.folder'};
+  if(parentId) body.parents=[parentId];
+  const r=await drivePost('files?fields=id',body);
+  return r.id;
+}
+async function findOrCreate(name,parentId){
+  const existing=await findFolder(name,parentId);
+  return existing||await createFolder(name,parentId);
+}
+async function uploadFile(name,content,mime,parentId){
+  const tok=await getAccessToken();
+  const meta={name,parents:[parentId]};
+  const boundary='rrhh_boundary_xyz';
+  const body=`--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n${content}\r\n--${boundary}--`;
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${tok}`,'Content-Type':`multipart/related; boundary=${boundary}`},
+    body
+  });
+  if(!r.ok) throw new Error(`Upload ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function findFile(name,parentId){
+  const q=`name='${name}' and '${parentId}' in parents and trashed=false`;
+  const r=await driveGet(`files?q=${encodeURIComponent(q)}&fields=files(id,name)`);
+  return r.files&&r.files.length?r.files[0].id:null;
+}
+async function updateFile(fileId,content,mime){
+  const tok=await getAccessToken();
+  const r=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{
+    method:'PATCH',headers:{Authorization:`Bearer ${tok}`,'Content-Type':mime},body:content
+  });
+  if(!r.ok) throw new Error(`Update ${r.status}`);
+  return r.json();
+}
+async function upsertFile(name,content,mime,parentId){
+  const existing=await findFile(name,parentId);
+  if(existing) return updateFile(existing,content,mime);
+  return uploadFile(name,content,mime,parentId);
+}
+
+/* ── DRIVE INIT ── */
+async function initDrive(){
+  setDot('busy','Conectando con Drive...');
+  try{
+    await getAccessToken();
+    rootFolderId=await findOrCreate(FOLDER_ROOT_NAME,null);
+    setDot('ok','Drive conectado ✓');
+    cargarMaestroDesde Drive();
+  }catch(e){
+    setDot('err','Error Drive: '+e.message);
+    console.error(e);
+  }
+}
+
+async function cargarMaestroDesde_Drive(){
+  try{
+    const now=new Date();
+    const anyo=String(now.getFullYear());
+    const mes=mesNombre(now);
+    const anyoId=await findFolder(anyo,rootFolderId); if(!anyoId) return;
+    const mesId=await findFolder(mes,anyoId); if(!mesId) return;
+    const q=`name='MAESTRO_${mes}_${anyo}.json' and '${mesId}' in parents and trashed=false`;
+    const r=await driveGet(`files?q=${encodeURIComponent(q)}&fields=files(id,name)`);
+    if(!r.files||!r.files.length) return;
+    const tok=await getAccessToken();
+    const fr=await fetch(`https://www.googleapis.com/drive/v3/files/${r.files[0].id}?alt=media`,{headers:{Authorization:`Bearer ${tok}`}});
+    if(!fr.ok) return;
+    const maestro=await fr.json();
+    if(maestro.semanas){
+      semanas=maestro.semanas;
+      saveLocal();
+      actualizarSel();
+      actualizarDepts();
+      renderMensual();
+      setAlert('ualert','as',`✓ Historial cargado desde Drive: ${semanas.length} semana(s) de ${mes} ${anyo}`);
+      setTimeout(()=>setAlert('ualert','',''),5000);
+    }
+  }catch(e){console.warn('No se pudo cargar maestro:',e.message);}
+}
+
+function setDot(cls,txt){
+  document.getElementById('ddot').className='dot '+cls;
+  document.getElementById('dlbl').textContent=txt;
+}
+
+/* ── GUARDAR EN DRIVE ── */
+async function guardarEnDrive(data){
+  showProg(true);
+  try{
+    setProg(10,'Verificando carpeta raíz...');
+    const anyo=String(new Date().getFullYear());
+    const mes=mesNombreFromFecha(data.fechas[0]);
+    setProg(25,'Creando carpeta del año...');
+    const anyoId=await findOrCreate(anyo,rootFolderId);
+    setProg(45,'Creando carpeta del mes...');
+    const mesId=await findOrCreate(mes,anyoId);
+    setProg(65,'Subiendo CSV semanal...');
+    const fname=`semana_${data.fechas[0].replace(/\//g,'_')}.csv`;
+    await upsertFile(fname,data.raw,'text/csv',mesId);
+    setProg(80,'Actualizando archivo maestro...');
+    const maestro={
+      generado:new Date().toISOString(),
+      semanas:semanas.map(s=>({id:s.id,fechas:s.fechas,nombre:s.nombre,emps:s.emps}))
+    };
+    await upsertFile(`MAESTRO_${mes}_${anyo}.json`,JSON.stringify(maestro,null,2),'application/json',mesId);
+    setProg(100,'¡Guardado correctamente!');
+    setTimeout(()=>{
+      showProg(false);
+      setAlert('ualert','as',`✓ Guardado en Drive: ${FOLDER_ROOT_NAME} / ${anyo} / ${mes} / ${fname}`);
+      setTimeout(()=>setAlert('ualert','',''),7000);
+    },600);
+  }catch(e){
+    showProg(false);
+    setAlert('ualert','aw',`Guardado localmente. Error Drive: ${e.message}`);
+    console.error(e);
+  }
+}
+
+function showProg(v){document.getElementById('pwrap').style.display=v?'':'none';}
+function setProg(p,t){document.getElementById('pfill').style.width=p+'%';document.getElementById('pstep').textContent=t;}
+
+/* ── CSV PARSE ── */
+function ss(line){const r=[];let q=false,c='';for(const ch of line){if(ch==='"'){q=!q;}else if(ch===','&&!q){r.push(c);c='';}else{c+=ch;}}r.push(c);return r;}
+function parseCSV(text){
+  const lines=text.replace(/\r/g,'').trim().split('\n').filter(l=>l.trim());
+  if(lines.length<2)return[];
+  const hdr=ss(lines[0]).map(h=>h.trim().replace(/"/g,''));
+  return lines.slice(1).map(l=>{const v=ss(l);const o={};hdr.forEach((h,i)=>o[h]=(v[i]||'').replace(/"/g,'').trim());return o;});
+}
+
+/* ── HORARIOS ── */
+function toMin(t){if(!t||t==='-')return null;const p=t.substring(0,5).split(':');return parseInt(p[0])*60+parseInt(p[1]);}
+function getTurno(dept,hora){
+  const k=Object.keys(horarios).find(k=>dept===k||dept&&dept.includes(k));
+  const turnos=horarios[k]||[{t:'?',h:'07:00'}];
+  const em=toMin(hora);if(em===null)return null;
+  let best=null,bd=Infinity;
+  for(const t of turnos){const d=Math.abs(em-toMin(t.h));if(d<bd){bd=d;best=t;}}
+  return best;
+}
+function esR(dept,hora){if(!hora||hora==='-'||hora==='')return false;const t=getTurno(dept,hora);if(!t)return false;return(toMin(hora.substring(0,5))-toMin(t.h))>1;}
+function minsR(dept,hora){if(!hora||hora==='-'||hora==='')return 0;const t=getTurno(dept,hora);if(!t)return 0;return Math.max(0,toMin(hora.substring(0,5))-toMin(t.h));}
+
+/* ── PROCESAR DATOS ── */
+function procesarRows(rows){
+  const emps={},dias=new Set();
+  for(const r of rows){
+    const nom=r['Empleado']||'';if(!nom||nom==='Empleado')continue;
+    const dept=r['Departamento']||'';
+    const fecha=r['Fecha']||'';
+    const primer=r['Primer fichaje']||'-';
+    const vac=r['Vacaciones']||'';
+    const perm=r['Permiso remunerado']||'';
+    if(!emps[nom])emps[nom]={nombre:nom,departamento:dept,dias:{}};
+    dias.add(fecha);
+    const aus=primer==='-'||primer==='';
+    const esV=vac&&vac!=='';const esP=perm&&perm!=='';
+    let ret=false,mins=0,refH=null;
+    if(!aus&&!esV&&!esP){ret=esR(dept,primer);mins=minsR(dept,primer);const t=getTurno(dept,primer);refH=t?t.h:null;}
+    emps[nom].dias[fecha]={primer,retraso:ret,mins,ausente:aus&&!esV&&!esP,vac:esV,perm:esP,refH};
+  }
+  const allD=Array.from(dias).sort((a,b)=>{const p=s=>{const[d,m,y]=s.split('/');return new Date(y,m-1,d);};return p(a)-p(b);})
+    .filter(d=>{const[dd,mm,yy]=d.split('/');const dt=new Date(yy,mm-1,dd);return dt.getDay()!==0&&dt.getDay()!==6;});
+  return{emps,dias:allD};
+}
+
+/* ── SUBIR ── */
+function handleFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>prepararSubida(ev.target.result,f.name);r.readAsText(f,'utf-8');}
+function procesarPegado(){const t=document.getElementById('cpaste').value.trim();if(!t){alert('Pega el CSV primero.');return;}prepararSubida(t,'datos pegados');}
+
+function prepararSubida(text,nombre){
+  try{
+    const rows=parseCSV(text);
+    if(rows.length<2){setAlert('ualert','aw','No se encontraron datos válidos.');return;}
+    const{emps,dias}=procesarRows(rows);
+    const diasL=dias.slice(0,5);
+    if(!diasL.length){setAlert('ualert','aw','No se encontraron días laborables.');return;}
+    const id=diasL[0]+'_'+diasL[diasL.length-1];
+    pending={id,nombre,raw:text,fechas:diasL,emps};
+    const nE=Object.keys(emps).length;
+    const nR=Object.values(emps).reduce((s,e)=>s+diasL.filter(f=>e.dias[f]&&e.dias[f].retraso).length,0);
+    document.getElementById('mcsub').textContent=`Semana del ${diasL[0]} al ${diasL[diasL.length-1]}`;
+    document.getElementById('mcinfo').innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+        <div style="background:var(--bg2);padding:10px;border-radius:var(--r);"><div style="font-size:11px;color:var(--text2);">Empleados</div><div style="font-size:22px;font-weight:600;">${nE}</div></div>
+        <div style="background:var(--red-bg);padding:10px;border-radius:var(--r);"><div style="font-size:11px;color:var(--red-text);">Retrasos detectados</div><div style="font-size:22px;font-weight:600;color:var(--red-bd);">${nR}</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);">Se guardará en: <strong>${FOLDER_ROOT_NAME} / ${new Date().getFullYear()} / ${mesNombreFromFecha(diasL[0])} / semana_${diasL[0].replace(/\//g,'_')}.csv</strong></div>`;
+    openM('mconf');
+  }catch(e){setAlert('ualert','ae','Error: '+e.message);}
+}
+
+function confirmar(){
+  closeM('mconf');if(!pending)return;
+  const ex=semanas.findIndex(s=>s.id===pending.id);
+  if(ex>=0)semanas[ex]=pending;else semanas.push(pending);
+  saveLocal();actualizarSel();actualizarDepts();renderMensual();
+  semanaActual=pending;
+  renderSemanal();
+  const sel=document.getElementById('ssel');sel.value=pending.id;
+  guardarEnDrive(pending);
+  showPage('semanal');
+}
+
+/* ── RENDERS ── */
+function mesNombre(now){const M=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];return M[now.getMonth()];}
+function mesNombreFromFecha(f){if(!f)return'';const[,m]=f.split('/');const M=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];return M[parseInt(m)-1]||'Mes';}
+const DIAS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+function actualizarSel(){
+  const sel=document.getElementById('ssel');const cur=sel.value;
+  sel.innerHTML='<option value="">— Seleccionar semana —</option>'+
+    semanas.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${s.fechas[0]} → ${s.fechas[s.fechas.length-1]}</option>`).join('');
+  if(!cur&&semanas.length)sel.value=semanas[semanas.length-1].id;
+}
+function actualizarDepts(){
+  const depts=new Set();semanas.forEach(s=>Object.values(s.emps).forEach(e=>depts.add(e.departamento)));
+  ['sdept','mdept'].forEach(id=>{
+    const el=document.getElementById(id);const cur=el.value;
+    el.innerHTML='<option value="">Todos los depts.</option>'+Array.from(depts).sort().map(d=>`<option value="${d}"${d===cur?' selected':''}>${d}</option>`).join('');
+  });
+}
+function cargarSemana(id){semanaActual=semanas.find(s=>s.id===id)||null;renderSemanal();}
+
+function renderSemanal(){
+  const se=document.getElementById('sstats'),te=document.getElementById('stable');
+  if(!semanaActual){se.innerHTML='';te.innerHTML='<div class="empty"><div class="eicon">📋</div><div>Carga un CSV para ver los datos</div></div>';return;}
+  const{fechas,emps}=semanaActual;
+  document.getElementById('ssub').textContent=`Semana del ${fechas[0]} al ${fechas[fechas.length-1]}`;
+  const search=(document.getElementById('ssearch').value||'').toLowerCase();
+  const fD=document.getElementById('sdept').value;
+  const fE=document.getElementById('sestado').value;
+  let todos=Object.values(emps);
+  if(fD)todos=todos.filter(e=>e.departamento===fD);
+  if(search)todos=todos.filter(e=>e.nombre.toLowerCase().includes(search));
+  todos=todos.map(e=>({...e,nr:fechas.filter(f=>e.dias[f]&&e.dias[f].retraso).length}));
+  if(fE==='alerta')todos=todos.filter(e=>e.nr>=2);
+  if(fE==='uno')todos=todos.filter(e=>e.nr>=1);
+  if(fE==='ok')todos=todos.filter(e=>e.nr===0);
+  todos.sort((a,b)=>b.nr-a.nr||a.nombre.localeCompare(b.nombre));
+  const nA=todos.filter(e=>e.nr>=2).length,nU=todos.filter(e=>e.nr>=1).length,nT=todos.reduce((s,e)=>s+e.nr,0);
+  se.innerHTML=`<div class="stat"><div class="slabel">Empleados</div><div class="sval">${todos.length}</div></div><div class="stat"><div class="slabel">Con retraso</div><div class="sval amb">${nU}</div></div><div class="stat"><div class="slabel">Alertas (≥2)</div><div class="sval red">${nA}</div></div><div class="stat"><div class="slabel">Total retrasos</div><div class="sval">${nT}</div></div>`;
+  const dh=fechas.map(f=>{const[d,m,y]=f.split('/');const dt=new Date(y,m-1,d);return`<th>${DIAS[dt.getDay()]} ${d}/${m}</th>`;}).join('');
+  const rows=todos.map(e=>{
+    const cls=e.nr>=2?'roja':e.nr>=1?'amber':'';
+    const cds=fechas.map(f=>{
+      const d=e.dias[f];if(!d)return`<td class="cdim">—</td>`;
+      if(d.vac)return`<td><span class="badge bb">Vacac.</span></td>`;
+      if(d.perm)return`<td><span class="badge bx">Permiso</span></td>`;
+      if(d.ausente)return`<td class="cdim">Ausente</td>`;
+      const h=d.primer.substring(0,5);
+      const ref=d.refH?`<br><span style="font-size:10px;color:var(--text3)">ref:${d.refH}</span>`:'';
+      if(d.retraso)return`<td><span class="mono clate">${h}</span>${ref}<br><span style="font-size:10px;color:var(--red-bd)">+${d.mins}min</span></td>`;
+      return`<td><span class="mono cok">${h}</span>${ref}</td>`;
+    }).join('');
+    const badge=e.nr>=2?`<span class="badge br">⚠ ${e.nr} retrasos</span>`:e.nr===1?`<span class="badge ba">1 retraso</span>`:`<span class="badge bg">OK</span>`;
+    return`<tr class="${cls}"><td style="font-weight:500;white-space:nowrap;min-width:170px">${e.nombre}</td><td style="font-size:11px;color:var(--text2);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.departamento}</td>${cds}<td>${badge}</td></tr>`;
+  }).join('');
+  te.innerHTML=`<table><thead><tr><th>Empleado</th><th>Departamento</th>${dh}<th>Estado</th></tr></thead><tbody>${rows||'<tr><td colspan="99" style="text-align:center;padding:24px;color:var(--text2)">Sin resultados</td></tr>'}</tbody></table>`;
+}
+
+function renderMensual(){
+  const se=document.getElementById('mstats'),te=document.getElementById('mtable');
+  if(!semanas.length){se.innerHTML='';te.innerHTML='<div class="empty"><div class="eicon">📊</div><div>Carga semanas para ver el acumulado</div></div>';return;}
+  const search=(document.getElementById('msearch').value||'').toLowerCase();
+  const fD=document.getElementById('mdept').value;
+  const fE=document.getElementById('mestado').value;
+  const acum={};
+  for(const sem of semanas){for(const[nom,emp]of Object.entries(sem.emps)){if(!acum[nom])acum[nom]={nombre:nom,departamento:emp.departamento,sems:{}};acum[nom].sems[sem.id]=sem.fechas.filter(f=>emp.dias[f]&&emp.dias[f].retraso).length;}}
+  let todos=Object.values(acum).map(e=>({...e,total:Object.values(e.sems).reduce((s,v)=>s+v,0)}));
+  if(fD)todos=todos.filter(e=>e.departamento===fD);
+  if(search)todos=todos.filter(e=>e.nombre.toLowerCase().includes(search));
+  if(fE==='alerta')todos=todos.filter(e=>e.total>=4);
+  if(fE==='uno')todos=todos.filter(e=>e.total>=1);
+  todos.sort((a,b)=>b.total-a.total||a.nombre.localeCompare(b.nombre));
+  const nA=todos.filter(e=>e.total>=4).length,nU=todos.filter(e=>e.total>=1).length;
+  se.innerHTML=`<div class="stat"><div class="slabel">Empleados</div><div class="sval">${todos.length}</div></div><div class="stat"><div class="slabel">Con retrasos</div><div class="sval amb">${nU}</div></div><div class="stat"><div class="slabel">Alertas mes (≥4)</div><div class="sval red">${nA}</div></div><div class="stat"><div class="slabel">Semanas cargadas</div><div class="sval">${semanas.length}</div></div>`;
+  const sh=semanas.map((s,i)=>{const f0=s.fechas[0]||'';return`<th style="text-align:center">Sem ${i+1}<br><span style="font-weight:400;font-size:10px">${f0.substring(0,5)}</span></th>`;}).join('');
+  const rows=todos.map(e=>{
+    const cls=e.total>=4?'roja':e.total>=1?'amber':'';
+    const cds=semanas.map(s=>{const r=e.sems[s.id]||0;if(!r)return`<td style="text-align:center;color:var(--text3)">—</td>`;return`<td style="text-align:center"><span class="badge ${r>=2?'br':'ba'}">${r}</span></td>`;}).join('');
+    const badge=e.total>=4?`<span class="badge br">⚠ ${e.total}</span>`:e.total>=1?`<span class="badge ba">${e.total}</span>`:`<span class="badge bg">OK</span>`;
+    return`<tr class="${cls}"><td style="font-weight:500;white-space:nowrap">${e.nombre}</td><td style="font-size:11px;color:var(--text2)">${e.departamento}</td>${cds}<td>${badge}</td></tr>`;
+  }).join('');
+  te.innerHTML=`<table><thead><tr><th>Empleado</th><th>Departamento</th>${sh}<th>Total</th></tr></thead><tbody>${rows||'<tr><td colspan="99" style="text-align:center;padding:24px;color:var(--text2)">Sin resultados</td></tr>'}</tbody></table>`;
+}
+
+/* ── HORARIOS UI ── */
+function renderHorarios(){
+  document.getElementById('hgrid').innerHTML=Object.entries(horarios).map(([dept,ts])=>`
+    <div class="hi"><div class="hdept">${dept}${ts.length>1?' <span class="tpill">DOBLE TURNO</span>':''}</div>
+    ${ts.map((t,i)=>`<div class="hrow"><span class="hlbl">${t.t}</span><input type="time" value="${t.h}" data-d="${dept}" data-i="${i}" onchange="upH(this)"></div>`).join('')}
+    </div>`).join('');
+}
+function upH(el){horarios[el.dataset.d][parseInt(el.dataset.i)].h=el.value;}
+function guardarHorarios(){
+  try{localStorage.setItem('rrhh_h',JSON.stringify(horarios));}catch(e){}
+  renderSemanal();renderMensual();
+  document.getElementById('hok').innerHTML='<div class="alert as">✓ Horarios guardados y tablas recalculadas.</div>';
+  setTimeout(()=>document.getElementById('hok').innerHTML='',3000);
+}
+function resetHorarios(){horarios=JSON.parse(JSON.stringify(HORARIOS_DEF));renderHorarios();}
+function addDept(){const n=prompt('Nombre del departamento:');if(!n)return;const h=prompt('Hora de entrada (HH:MM):','07:00');if(!h)return;horarios[n]=[{t:'Mañana',h}];renderHorarios();}
+
+/* ── EXPORTAR ── */
+function exportarAmonestaciones(){
+  const acum={};
+  for(const sem of semanas){for(const[nom,emp]of Object.entries(sem.emps)){if(!acum[nom])acum[nom]={nombre:nom,departamento:emp.departamento,total:0,det:[]};const r=sem.fechas.filter(f=>emp.dias[f]&&emp.dias[f].retraso);acum[nom].total+=r.length;r.forEach(f=>{const d=emp.dias[f];acum[nom].det.push({fecha:f,hora:d.primer.substring(0,5),mins:d.mins});});}}
+  const al=Object.values(acum).filter(e=>e.total>=4).sort((a,b)=>b.total-a.total);
+  if(!al.length){alert('No hay empleados con 4 o más retrasos en el mes.');return;}
+  let csv='Empleado,Departamento,Total retrasos,Detalle,Minutos acumulados\n';
+  for(const e of al){const det=e.det.map(d=>`${d.fecha} ${d.hora}(+${d.mins}min)`).join(' | ');const mt=e.det.reduce((s,d)=>s+d.mins,0);csv+=`"${e.nombre}","${e.departamento}",${e.total},"${det}",${mt}\n`;}
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`amonestaciones_${new Date().toISOString().substring(0,10)}.csv`;a.click();
+}
+
+/* ── UI UTILS ── */
+function setAlert(id,cls,msg){const el=document.getElementById(id);if(!msg){el.innerHTML='';return;}el.innerHTML=`<div class="alert ${cls}">${msg}</div>`;}
+function showPage(n){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+n).classList.add('active');
+  const pages=['subir','semanal','mensual',null,'horarios'];
+  pages.forEach((p,i)=>{if(p===n)document.querySelectorAll('.ni')[i]&&document.querySelectorAll('.ni')[i].classList.add('active');});
+  if(n==='semanal'){actualizarSel();if(semanas.length&&!semanaActual){semanaActual=semanas[semanas.length-1];document.getElementById('ssel').value=semanaActual.id;}renderSemanal();}
+  if(n==='mensual'){actualizarDepts();renderMensual();}
+  if(n==='horarios')renderHorarios();
+}
+function openM(id){document.getElementById(id).classList.add('open');}
+function closeM(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-bd').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+const dz=document.getElementById('dz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--blu-bd)';});
+dz.addEventListener('dragleave',()=>{dz.style.borderColor='';});
+dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>prepararSubida(ev.target.result,f.name);r.readAsText(f,'utf-8');});
+
+/* ── INIT ── */
+loadLocal();
+actualizarSel();
+actualizarDepts();
+renderHorarios();
+renderMensual();
+initDrive();
+</script>
+</body>
+</html>
