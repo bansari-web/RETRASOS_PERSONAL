@@ -223,9 +223,6 @@ const SA = {
 const FOLDER_ROOT_NAME = "RETRASOS PERSONAL";
 
 const HORARIOS_DEF = {
-  "Cámaras":[{t:"Mañana",h:"06:00"}],
-  "Carretilleros":[{t:"Mañana",h:"06:00"},{t:"Tarde",h:"14:00"}],
-  "Carretilleros Línea":[{t:"Mañana",h:"06:00"},{t:"Tarde",h:"14:00"}],
   "Fijos Línea - Verde":[{t:"Mañana",h:"07:00"}],
   "Fijos Línea - Azul":[{t:"Mañana",h:"07:00"}],
   "Fijos Línea - Naranja":[{t:"Mañana",h:"07:00"}],
@@ -245,7 +242,6 @@ const HORARIOS_DEF = {
   "Fijos Discontinuos - Auxiliares Producción":[{t:"Mañana",h:"07:00"}],
   "Auxliares Producción":[{t:"Mañana",h:"06:30"}],
   "Auxiliares Almacén":[{t:"Mañana",h:"06:55"},{t:"Oficina",h:"09:00"}],
-  "Proyectos":[{t:"Mañana",h:"06:30"}],
   "Ras Interim":[{t:"Mañana",h:"07:30"}],
   "Randstad":[{t:"Mañana",h:"06:00"}],
 };
@@ -656,10 +652,12 @@ function minsR(dept,hora){if(!hora||hora==='-'||hora==='')return 0;const t=getTu
 
 /* ── PROCESAR DATOS ── */
 function procesarRows(rows){
+  const EXCLUIR=['Cámaras','Carretilleros','Carretilleros Línea','Proyectos'];
   const emps={},dias=new Set();
   for(const r of rows){
     const nom=r['Empleado']||'';if(!nom||nom==='Empleado')continue;
     const dept=r['Departamento']||'';
+    if(EXCLUIR.some(ex=>dept===ex||dept.startsWith(ex))) continue;
     const fecha=r['Fecha']||'';
     const primer=r['Primer fichaje']||'-';
     const vac=r['Vacaciones']||'';
